@@ -1,0 +1,13 @@
+main: xyz.acrylicstyle.storageBox.StorageBoxPlugin
+name: StorageBox
+version: 1.15+1.5.7
+api-version: 1.15
+author: acrylic-style
+depend:
+  - Vault
+softdepend:
+  - mcMMO
+  - MyPet
+commands:
+  storagebox:
+    aliases: ["sb", "storage"]
