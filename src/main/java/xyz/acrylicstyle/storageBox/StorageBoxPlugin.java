@@ -1,12 +1,24 @@
 package xyz.acrylicstyle.storageBox;
 
+import com.gmail.nossr50.config.WorldBlacklist;
+import com.gmail.nossr50.datatypes.player.McMMOPlayer;
+import com.gmail.nossr50.datatypes.skills.PrimarySkillType;
+import com.gmail.nossr50.events.fake.FakeBlockBreakEvent;
+import com.gmail.nossr50.mcMMO;
+import com.gmail.nossr50.skills.herbalism.HerbalismManager;
+import com.gmail.nossr50.util.BlockUtils;
+import com.gmail.nossr50.util.player.UserManager;
+import com.gmail.nossr50.worldguard.WorldGuardManager;
+import com.gmail.nossr50.worldguard.WorldGuardUtils;
 import org.bukkit.*;
+import org.bukkit.block.Block;
 import org.bukkit.block.BlockState;
 import org.bukkit.entity.Item;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
+import org.bukkit.event.block.BlockBreakEvent;
 import org.bukkit.event.block.BlockDispenseEvent;
 import org.bukkit.event.block.BlockDropItemEvent;
 import org.bukkit.event.block.BlockPlaceEvent;
@@ -19,6 +31,8 @@ import org.bukkit.inventory.EquipmentSlot;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.ShapedRecipe;
 import org.bukkit.plugin.java.JavaPlugin;
+import org.jetbrains.annotations.Contract;
+import org.jetbrains.annotations.NotNull;
 import xyz.acrylicstyle.storageBox.utils.StorageBox;
 import xyz.acrylicstyle.storageBox.utils.StorageBoxUtils;
 
@@ -103,7 +117,7 @@ public class StorageBoxPlugin extends JavaPlugin implements Listener {
     }
 
     @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
-    public void onPlayerAttemptPickupItem(EntityPickupItemEvent e) {
+    public void onPlayerAttemptPickupItem(@NotNull EntityPickupItemEvent e) {
         if (!(e.getEntity() instanceof Player)) return;
         Player player = (Player) e.getEntity();
         if (e.getItem().getItemStack().hasItemMeta()) return;
@@ -120,7 +134,7 @@ public class StorageBoxPlugin extends JavaPlugin implements Listener {
     }
 
     @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
-    public void onBlockDropItem(BlockDropItemEvent e) {
+    public void onBlockDropItem(@NotNull BlockDropItemEvent e) {
         List<Item> toRemove = new ArrayList<>();
         for (Item item : e.getItems()) {
             if (item.getItemStack().hasItemMeta()) return;
@@ -139,11 +153,12 @@ public class StorageBoxPlugin extends JavaPlugin implements Listener {
     }
 
     @EventHandler(priority = EventPriority.LOWEST)
-    public void onBlockDispense(BlockDispenseEvent e) {
+    public void onBlockDispense(@NotNull BlockDispenseEvent e) {
         if (StorageBox.getStorageBox(e.getItem()) != null) e.setCancelled(true);
     }
 
-    private static ItemStack n(ItemStack item) {
+    @Contract("null -> new; !null -> param1")
+    private static @NotNull ItemStack n(ItemStack item) {
         return item == null ? new ItemStack(Material.AIR) : item;
     }
 
@@ -168,7 +183,7 @@ public class StorageBoxPlugin extends JavaPlugin implements Listener {
     }
 
     @EventHandler
-    public void onCraftItem(CraftItemEvent e) {
+    public void onCraftItem(@NotNull CraftItemEvent e) {
         if (StorageBox.getStorageBox(e.getInventory().getResult()) != null) {
             e.getWhoClicked().sendMessage(ChatColor.GREEN + "アイテムの種類を設定するには、設定したいものをオフハンドに持ったうえで" + ChatColor.YELLOW + "/sb changetype" + ChatColor.GREEN + "を実行してください。");
             e.getWhoClicked().sendMessage(ChatColor.GREEN + "アイテムを取り出すには" + ChatColor.YELLOW + "/sb extract <数>" + ChatColor.GREEN + "を実行してください。");
@@ -177,8 +192,49 @@ public class StorageBoxPlugin extends JavaPlugin implements Listener {
         }
     }
 
+    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
+    public void onBlockBreak(@NotNull BlockBreakEvent e) {
+        if (e instanceof FakeBlockBreakEvent) return;
+        Block b = e.getBlock();
+        Player p = e.getPlayer();
+
+        if (WorldBlacklist.isWorldBlacklisted(b.getWorld())) {
+            cleanupBlockMetadata(b);
+            return;
+        }
+        if (WorldGuardUtils.isWorldGuardLoaded()) {
+            if (!WorldGuardManager.getInstance().hasMainFlag(p)) {
+                cleanupBlockMetadata(b);
+                return;
+            }
+        }
+        BlockState state = b.getState();
+        McMMOPlayer mcMMOPlayer = UserManager.getPlayer(p);
+
+        if (mcMMOPlayer == null) {
+            cleanupBlockMetadata(b);
+            return;
+        }
+        if (BlockUtils.affectedByGreenTerra(state)) {
+            HerbalismManager mgr =mcMMOPlayer.getHerbalismManager();
+
+            if (mgr.canActivateAbility()) {
+                mcMMOPlayer.checkAbilityActivation(PrimarySkillType.HERBALISM);
+            }
+            if (mcMMO.p.getSkillTools().doesPlayerHaveSkillPermission(p, PrimarySkillType.HERBALISM)) {
+                mgr.processHerbalismBlockBreakEvent(e);
+            }
+        }
+    }
+
+    private void cleanupBlockMetadata(@NotNull Block block) {
+        if (block.hasMetadata("mcMMO: Recently Replanted")) {
+            block.removeMetadata("mcMMO: Recently Replanted", JavaPlugin.getPlugin(mcMMO.class));
+        }
+    }
+
     @EventHandler
-    public void onInventoryClick(InventoryClickEvent e) {
+    public void onInventoryClick(@NotNull InventoryClickEvent e) {
         if (e.getWhoClicked().getGameMode() == GameMode.CREATIVE) return;
         if (e.getClickedInventory() == null) return;
         if (e.getCurrentItem() == null || e.getCurrentItem().getType().isAir()) return;
@@ -205,7 +261,7 @@ public class StorageBoxPlugin extends JavaPlugin implements Listener {
         }
     }*/
 
-    public static int getEmptySlots(Player p) {
+    public static int getEmptySlots(@NotNull Player p) {
         ItemStack[] cont = p.getInventory().getContents();
         int i = 0;
         for (ItemStack item : cont) if (item == null || item.getType() == Material.AIR) i++;
@@ -217,7 +273,7 @@ public class StorageBoxPlugin extends JavaPlugin implements Listener {
         return i;
     }
 
-    public static StorageBoxPlugin getInstance() {
+    public static @NotNull StorageBoxPlugin getInstance() {
         return getPlugin(StorageBoxPlugin.class);
     }
 }

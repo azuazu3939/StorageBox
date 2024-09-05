@@ -1,6 +1,6 @@
 main: xyz.acrylicstyle.storageBox.StorageBoxPlugin
 name: StorageBox
-version: 0.0.1-SNAPSHOT
+version: 0.0.4-SNAPSHOT
 api-version: 1.15
 author: acrylic-style
 commands:
